@@ -1,0 +1,230 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project name="lab3-ant" default="compile" basedir=".">
+
+    <!-- Загрузка параметров -->
+    <property file="build.properties"/>
+    <property environment="env"/>
+
+    <!-- Время сборки -->
+    <tstamp>
+        <format property="TODAY" pattern="yyyy-MM-dd HH:mm:ss"/>
+    </tstamp>
+
+    <!-- ==================== 1. COMPILE ==================== -->
+    <target name="compile" description="Компиляция исходных кодов">
+        <ant antfile="build-jar.xml" target="compile" inheritall="false">
+            <property name="param.src" value="${src.dir}"/>
+            <property name="param.classes" value="${build.dir}/classes"/>
+        </ant>
+    </target>
+
+    <!-- ==================== 2. BUILD ==================== -->
+    <target name="build" depends="compile" description="Компиляция и упаковка в JAR">
+        <ant antfile="build-jar.xml" target="build" inheritall="false">
+            <property name="param.src" value="${src.dir}"/>
+            <property name="param.classes" value="${build.dir}/classes"/>
+            <property name="param.name" value="${project.name}"/>
+            <property name="param.main" value="${main.class}"/>
+        </ant>
+    </target>
+
+    <!-- ==================== 3. CLEAN ==================== -->
+    <target name="clean" description="Удаление скомпилированных и временных файлов">
+        <delete dir="${build.dir}"/>
+        <delete dir="${dist.dir}"/>
+        <delete dir="${doc.dir}"/>
+        <!-- Очищаем reports, но не удаляем саму папку -->
+        <delete includeemptydirs="true">
+            <fileset dir="${report.dir}" includes="**/*"/>
+        </delete>
+        <echo message="[CLEAN] Очистка завершена"/>
+    </target>
+
+    <!-- ==================== 4. TEST ==================== -->
+    <target name="test" depends="compile-test" description="Запуск JUnit-тестов">
+        <mkdir dir="${report.dir}/junit"/>
+        <junit printsummary="yes" haltonfailure="no" fork="yes">
+            <classpath>
+                <pathelement path="${build.dir}/classes"/>
+                <pathelement path="${build.dir}/test-classes"/>
+                <fileset dir="${lib.dir}">
+                    <include name="**/*.jar"/>
+                </fileset>
+            </classpath>
+            <formatter type="xml"/>
+            <batchtest todir="${report.dir}/junit">
+                <fileset dir="${build.dir}/test-classes">
+                    <include name="**/*Test.class"/>
+                </fileset>
+            </batchtest>
+        </junit>
+        <echo message="[TEST] Тесты выполнены. Отчёты: ${report.dir}/junit"/>
+    </target>
+
+    <!-- ===== Компиляция тестов, так как они лежат в test/java ===== -->
+    <target name="compile-test" depends="build">
+        <mkdir dir="${build.dir}/test-classes"/>
+        <javac srcdir="${test.dir}"
+               destdir="${build.dir}/test-classes"
+               source="${compiler.source}"
+               target="${compiler.target}"
+               includeantruntime="false"
+               debug="true">
+            <classpath>
+                <pathelement path="${build.dir}/classes"/>
+                <fileset dir="${lib.dir}">
+                    <include name="**/*.jar"/>
+                </fileset>
+            </classpath>
+        </javac>
+    </target>
+
+    <!-- ==================== 5. DOC ==================== -->
+    <target name="doc" depends="build" description="Javadoc + MD5/SHA-1 в MANIFEST.MF">
+        <mkdir dir="${doc.dir}/javadoc"/>
+        <javadoc sourcepath="${src.dir}"
+                 destdir="${doc.dir}/javadoc"
+                 author="true"
+                 version="true"
+                 windowtitle="${project.name} API">
+            <classpath>
+                <fileset dir="${lib.dir}">
+                    <include name="**/*.jar"/>
+                </fileset>
+            </classpath>
+        </javadoc>
+        <checksum file="${dist.dir}/${project.name}.jar" algorithm="MD5" property="md5.hash"/>
+        <checksum file="${dist.dir}/${project.name}.jar" algorithm="SHA-1" property="sha1.hash"/>
+        <manifest file="${build.dir}/MANIFEST.MF" mode="update">
+            <attribute name="MD5-Digest" value="${md5.hash}"/>
+            <attribute name="SHA1-Digest" value="${sha1.hash}"/>
+        </manifest>
+        <jar destfile="${dist.dir}/${project.name}.jar"
+             basedir="${build.dir}/classes"
+             manifest="${build.dir}/MANIFEST.MF"
+             update="true">
+            <fileset dir="${doc.dir}" includes="javadoc/**"/>
+        </jar>
+        <echo message="[DOC] Javadoc и контрольные суммы добавлены"/>
+    </target>
+
+    <!-- ==================== 6. MUSIC ==================== -->
+    <target name="music" depends="build" description="Воспроизведение музыки после сборки">
+        <exec executable="afplay" os="Mac OS X">
+            <arg value="${music.file}"/>
+        </exec>
+        <echo message="[MUSIC] Воспроизведение..."/>
+    </target>
+
+    <!-- ==================== 7. SCP ==================== -->
+    <target name="scp" depends="build" description="Перемещение JAR по SCP на сервер">
+        <tstamp>
+            <format property="scp.timestamp" pattern="yyyy-MM-dd_HH-mm-ss"/>
+        </tstamp>
+
+        <exec executable="scp" failonerror="false">
+            <arg value="-P"/>
+            <arg value="${scp.port}"/>
+            <arg value="${dist.dir}/${project.name}.jar"/>
+            <arg value="${scp.user}@${scp.server}:${scp.path}/${project.name}-${scp.timestamp}.jar"/>
+        </exec>
+        <echo message="[SCP] Файл отправлен: ${project.name}-${scp.timestamp}.jar"/>
+    </target>
+
+    <!-- ==================== 8. NATIVE2ASCII ==================== -->
+    <target name="native2ascii" description="Преобразование файлов локализации">
+        <mkdir dir="${native.dest.dir}"/>
+        <native2ascii src="${native.src.dir}"
+                      dest="${native.dest.dir}"
+                      includes="*.properties"
+                      ext=".properties"
+                      encoding="UTF-8"/>
+        <echo message="[NATIVE2ASCII] Файлы локализации преобразованы"/>
+    </target>
+
+    <!-- ==================== 9. XML ==================== -->
+    <target name="xml" description="Валидация всех XML-файлов в проекте">
+        <xmlvalidate lenient="yes">
+            <fileset dir="." includes="**/*.xml" excludes=".idea/**"/>
+        </xmlvalidate>
+        <echo message="[XML] Валидация XML завершена"/>
+    </target>
+
+    <!-- ==================== 10. REPORT ==================== -->
+    <target name="report" depends="test" description="JUnit отчёт + commit в SVN">
+        <exec executable="svn" failonerror="false">
+            <arg value="add"/>
+            <arg value="--force"/>
+            <arg value="${report.dir}/junit"/>
+        </exec>
+        <exec executable="svn" failonerror="false">
+            <arg value="commit"/>
+            <arg value="-m"/>
+            <arg value="JUnit test report"/>
+        </exec>
+        <echo message="[REPORT] Отчёт сохранён и закоммичен в SVN"/>
+    </target>
+
+    <!-- ==================== 11. ALT ==================== -->
+    <target name="alt" description="Альтернативная версия с заменой имён">
+        <mkdir dir="${build.dir}/alt/src"/>
+        <copy todir="${build.dir}/alt/src">
+            <fileset dir="${src.dir}"/>
+        </copy>
+        <replace dir="${build.dir}/alt/src" token="${replace.class.original}" value="${replace.class.new}"/>
+        <replace dir="${build.dir}/alt/src" token="${replace.variable.original}" value="${replace.variable.new}"/>
+        <move file="${build.dir}/alt/src/com/areaapp/${replace.class.original}.java"
+              tofile="${build.dir}/alt/src/com/areaapp/${replace.class.new}.java"
+              failonerror="false"/>
+
+        <!-- Вызов build-jar.xml с альтернативными параметрами -->
+        <ant antfile="build-jar.xml" target="build" inheritall="false">
+            <property name="param.src" value="${build.dir}/alt/src"/>
+            <property name="param.classes" value="${build.dir}/alt/classes"/>
+            <property name="param.name" value="${project.name}-alt"/>
+            <property name="param.main" value="${replace.class.new}"/>
+        </ant>
+        <echo message="[ALT] Альтернативная версия создана: ${dist.dir}/${project.name}-alt.jar"/>
+    </target>
+
+    <!-- Подготовка альтернативных исходников -->
+    <target name="prepare-alt">
+        <mkdir dir="${build.dir}/alt/src"/>
+        <copy todir="${build.dir}/alt/src">
+            <fileset dir="${original.src.dir}"/>
+        </copy>
+
+        <replace dir="${build.dir}/alt/src" token="${replace.class.original}" value="${replace.class.new}"/>
+        <replace dir="${build.dir}/alt/src" token="${replace.variable.original}" value="${replace.variable.new}"/>
+
+        <move file="${build.dir}/alt/src/com/areaapp/${replace.class.original}.java"
+              tofile="${build.dir}/alt/src/com/areaapp/${replace.class.new}.java"
+              failonerror="false"/>
+    </target>
+
+    <!-- ==================== 15. DIFF ==================== -->
+    <target name="diff" description="Проверка изменений и commit в SVN">
+        <exec executable="svn" outputproperty="svn.status" failonerror="false">
+            <arg value="status"/>
+        </exec>
+        <echo message="SVN Status: ${svn.status}"/>
+        <condition property="can.commit">
+            <not>
+                <and>
+                    <contains string="${svn.status}" substring="${diff.allowed.classes}"/>
+                    <contains string="${svn.status}" substring="M "/>
+                </and>
+            </not>
+        </condition>
+        <antcall target="svn-commit-if-allowed"/>
+    </target>
+
+    <target name="svn-commit-if-allowed" if="can.commit">
+        <exec executable="svn" failonerror="false">
+            <arg value="commit"/>
+            <arg value="-m"/>
+            <arg value="Auto-commit: allowed classes changed"/>
+        </exec>
+        <echo message="[DIFF] Изменения закоммичены в SVN"/>
+    </target>
+</project>

@@ -1,0 +1,179 @@
+svnadmin create lab3-ant
+
+---
+
+razgonyaevm@MacBook-Pro-Maksim-6 lab-3-opi % svn import . file:///Users/razgonyaevm/Desktop/Учеба/Опи/SVNRepos/lab3-ant -m "Initial commit"
+Adding         .gitignore
+Adding         .idea
+Adding         .idea/.gitignore
+Adding         .idea/ant.xml
+Adding         .idea/lab-3-opi.iml
+Adding         .idea/libraries
+Adding         .idea/libraries/lib.xml
+Adding         .idea/misc.xml
+Adding         .idea/modules.xml
+Adding         .idea/workspace.xml
+Adding         build-jar.xml
+Adding         build.properties
+Adding         build.xml
+Adding         lib
+Adding  (bin)  lib/antlr4-runtime-4.13.0.jar
+Adding  (bin)  lib/antlr4-runtime-4.9.3.jar
+Adding  (bin)  lib/byte-buddy-1.12.18.jar
+Adding  (bin)  lib/byte-buddy-1.14.11.jar
+Adding  (bin)  lib/classmate-1.5.1.jar
+Adding  (bin)  lib/hamcrest-core-1.3.jar
+Adding  (bin)  lib/hibernate-commons-annotations-5.1.2.Final.jar
+Adding  (bin)  lib/hibernate-core-5.6.15.Final.jar
+Adding  (bin)  lib/hibernate-jpa-2.1-api-1.0.2.Final.jar
+Adding  (bin)  lib/hibernate-ogm-core-5.4.1.Final.jar
+Adding  (bin)  lib/hibernate-ogm-mongodb-5.4.1.Final.jar
+Adding  (bin)  lib/istack-commons-runtime-4.1.1.jar
+Adding  (bin)  lib/jakarta.activation-api-2.1.2.jar
+Adding  (bin)  lib/jakarta.faces-4.0.1.jar
+Adding  (bin)  lib/jakarta.inject-api-2.0.1.jar
+Adding  (bin)  lib/jakarta.jakartaee-web-api-10.0.0.jar
+Adding  (bin)  lib/jakarta.transaction-api-2.0.1.jar
+Adding  (bin)  lib/jakarta.xml.bind-api-4.0.0.jar
+Adding  (bin)  lib/jandex-2.4.2.Final.jar
+Adding  (bin)  lib/javax.persistence-api-2.2.jar
+Adding  (bin)  lib/jaxb-core-4.0.3.jar
+Adding  (bin)  lib/jaxb-runtime-4.0.3.jar
+Adding  (bin)  lib/jboss-logging-3.4.3.Final.jar
+Adding  (bin)  lib/jboss-logging-3.5.3.Final.jar
+Adding  (bin)  lib/jboss-transaction-api_1.2-1.1.1.Final.jar
+Adding  (bin)  lib/junit-4.13.2.jar
+Adding  (bin)  lib/lombok-1.18.40.jar
+Adding  (bin)  lib/mongodb-driver-sync-4.10.2.jar
+Adding  (bin)  lib/postgresql-42.6.0.jar
+Adding  (bin)  lib/primefaces-14.0.0-jakarta.jar
+Adding  (bin)  lib/txw2-4.0.3.jar
+Adding         music
+Adding  (bin)  music/success.mp3
+Adding         src
+Adding         src/main
+Adding         src/main/java
+Adding         src/main/java/com
+Adding         src/main/java/com/areaapp
+Adding         src/main/java/com/areaapp/Main.java
+Adding         src/main/java/com/areaapp/bean
+Adding         src/main/java/com/areaapp/bean/AreaCheckBean.java
+Adding         src/main/java/com/areaapp/bean/NavigationBean.java
+Adding         src/main/java/com/areaapp/bean/ResultsBean.java
+Adding         src/main/java/com/areaapp/entity
+Adding         src/main/java/com/areaapp/entity/PointResult.java
+Adding         src/main/java/com/areaapp/service
+Adding         src/main/java/com/areaapp/service/PointService.java
+Adding         src/main/java/com/areaapp/util
+Adding         src/main/java/com/areaapp/util/HibernateUtil.java
+Adding         src/main/resources
+Adding         src/main/resources/hibernate.cfg.xml
+Adding         src/main/resources/locale
+Adding         src/main/resources/locale/messages.properties
+Adding         src/main/webapp
+Adding         src/main/webapp/WEB-INF
+Adding         src/main/webapp/WEB-INF/beans.xml
+Adding         src/main/webapp/WEB-INF/faces-config.xml
+Adding         src/main/webapp/WEB-INF/web.xml
+Adding         src/main/webapp/index.xhtml
+Adding         src/main/webapp/main.xhtml
+Adding         src/main/webapp/resources
+Adding         src/main/webapp/resources/css
+Adding         src/main/webapp/resources/css/style.css
+Adding         src/test
+Adding         src/test/java
+Adding         src/test/java/com
+Adding         src/test/java/com/areaapp
+Adding         src/test/java/com/areaapp/AppTest.java
+Committing transaction...
+Committed revision 1.
+
+---
+
+razgonyaevm@MacBook-Pro-Maksim-6 lab-3-opi % svn checkout --force file:///Users/razgonyaevm/Desktop/Учеба/Опи/SVNRepos/lab3-ant .
+E    .gitignore
+E    .idea
+E    .idea/.gitignore
+E    .idea/ant.xml
+E    .idea/lab-3-opi.iml
+E    .idea/libraries
+E    .idea/libraries/lib.xml
+E    .idea/misc.xml
+E    .idea/modules.xml
+E    .idea/workspace.xml
+E    build-jar.xml
+E    build.properties
+E    build.xml
+E    lib
+E    lib/antlr4-runtime-4.13.0.jar
+E    lib/antlr4-runtime-4.9.3.jar
+E    lib/byte-buddy-1.12.18.jar
+E    lib/byte-buddy-1.14.11.jar
+E    lib/classmate-1.5.1.jar
+E    lib/hamcrest-core-1.3.jar
+E    lib/hibernate-commons-annotations-5.1.2.Final.jar
+E    lib/hibernate-core-5.6.15.Final.jar
+E    lib/hibernate-jpa-2.1-api-1.0.2.Final.jar
+E    lib/hibernate-ogm-core-5.4.1.Final.jar
+E    lib/hibernate-ogm-mongodb-5.4.1.Final.jar
+E    lib/istack-commons-runtime-4.1.1.jar
+E    lib/jakarta.activation-api-2.1.2.jar
+E    lib/jakarta.faces-4.0.1.jar
+E    lib/jakarta.inject-api-2.0.1.jar
+E    lib/jakarta.jakartaee-web-api-10.0.0.jar
+E    lib/jakarta.transaction-api-2.0.1.jar
+E    lib/jakarta.xml.bind-api-4.0.0.jar
+E    lib/jandex-2.4.2.Final.jar
+E    lib/javax.persistence-api-2.2.jar
+E    lib/jaxb-core-4.0.3.jar
+E    lib/jaxb-runtime-4.0.3.jar
+E    lib/jboss-logging-3.4.3.Final.jar
+E    lib/jboss-logging-3.5.3.Final.jar
+E    lib/jboss-transaction-api_1.2-1.1.1.Final.jar
+E    lib/junit-4.13.2.jar
+E    lib/lombok-1.18.40.jar
+E    lib/mongodb-driver-sync-4.10.2.jar
+E    lib/postgresql-42.6.0.jar
+E    lib/primefaces-14.0.0-jakarta.jar
+E    lib/txw2-4.0.3.jar
+E    music
+E    music/success.mp3
+E    src
+E    src/main
+E    src/main/java
+E    src/main/java/com
+E    src/main/java/com/areaapp
+E    src/main/java/com/areaapp/Main.java
+E    src/main/java/com/areaapp/bean
+E    src/main/java/com/areaapp/bean/AreaCheckBean.java
+E    src/main/java/com/areaapp/bean/NavigationBean.java
+E    src/main/java/com/areaapp/bean/ResultsBean.java
+E    src/main/java/com/areaapp/entity
+E    src/main/java/com/areaapp/entity/PointResult.java
+E    src/main/java/com/areaapp/service
+E    src/main/java/com/areaapp/service/PointService.java
+E    src/main/java/com/areaapp/util
+E    src/main/java/com/areaapp/util/HibernateUtil.java
+E    src/main/resources
+E    src/main/resources/hibernate.cfg.xml
+E    src/main/resources/locale
+E    src/main/resources/locale/messages.properties
+E    src/main/webapp
+E    src/main/webapp/WEB-INF
+E    src/main/webapp/WEB-INF/beans.xml
+E    src/main/webapp/WEB-INF/faces-config.xml
+E    src/main/webapp/WEB-INF/web.xml
+E    src/main/webapp/index.xhtml
+E    src/main/webapp/main.xhtml
+E    src/main/webapp/resources
+E    src/main/webapp/resources/css
+E    src/main/webapp/resources/css/style.css
+E    src/test
+E    src/test/java
+E    src/test/java/com
+E    src/test/java/com/areaapp
+E    src/test/java/com/areaapp/AppTest.java
+Checked out revision 1.
+
+---
+
