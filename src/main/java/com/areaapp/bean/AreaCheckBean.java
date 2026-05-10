@@ -10,6 +10,9 @@ import java.io.Serializable;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.text.MessageFormat;
+import java.util.ResourceBundle;
+
 /**
  * Managed bean для обработки проверки попадания точек в заданную область.
  * <p>
@@ -28,6 +31,8 @@ import lombok.Setter;
 @Setter
 public class AreaCheckBean implements Serializable {
   private static final long serialVersionUID = 1L;
+
+  private static final ResourceBundle bundle = ResourceBundle.getBundle("locale.messages");
 
   /** Координата X точки */
   private Double x = 0.0;
@@ -49,7 +54,7 @@ public class AreaCheckBean implements Serializable {
    * </p>
    */
   public void checkPoint() {
-    System.out.println("Проверка точки: X=" + x + ", Y=" + y + ", R=" + r);
+    System.out.println(MessageFormat.format(bundle.getString("check.point"), x, y, r));
     if (isValidCoordinates(x, y, r)) {
       long startTime = System.nanoTime();
       boolean check = checkArea(x, y, r);
@@ -72,8 +77,8 @@ public class AreaCheckBean implements Serializable {
     String clickYStr = context.getExternalContext().getRequestParameterMap().get("clickY");
     String currentRStr = context.getExternalContext().getRequestParameterMap().get("currentR");
 
-    System.out.println(
-        "Координаты клика: X=" + clickXStr + ", Y=" + clickYStr + ", R=" + currentRStr);
+    System.out.println(MessageFormat.format(bundle.getString("check.coordinates.click"), clickXStr, clickYStr,
+            currentRStr));
 
     if (clickXStr != null && clickYStr != null) {
       try {
@@ -85,16 +90,16 @@ public class AreaCheckBean implements Serializable {
           this.r = Double.parseDouble(currentRStr);
         }
 
-        System.out.println("Установлены координаты: X=" + x + ", Y=" + y + ", R=" + r);
+        System.out.println(MessageFormat.format(bundle.getString("check.coordinates.set"), x, y, r));
 
         // Проверяем, что координаты находятся в допустимых диапазонах
         if (isValidCoordinates(x, y, r)) {
           checkPoint();
         } else {
-          System.err.println("Координаты вне допустимого диапазона после округления");
+          System.err.println(bundle.getString("check.coordinates.out.of.range"));
         }
       } catch (NumberFormatException e) {
-        System.err.println("Ошибка парсинга координат: " + e.getMessage());
+        System.err.println(MessageFormat.format(bundle.getString("check.coordinates.parse.error"), e.getMessage()));
       }
     }
   }

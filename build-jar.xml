@@ -22,7 +22,10 @@
             <compilerarg value="${lib.dir}/lombok-1.18.40.jar"/>
         </javac>
         <copy todir="${param.classes}">
-            <fileset dir="${resources.dir}" excludes="**/*.java"/>
+            <fileset dir="${resources.dir}" excludes="**/*.java,locale/**"/>
+        </copy>
+        <copy todir="${param.classes}/locale">
+            <fileset dir="${build.dir}/locale"/>
         </copy>
         <echo message="[COMPILE] Компиляция завершена"/>
     </target>

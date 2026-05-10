@@ -12,6 +12,7 @@
 
     <!-- ==================== 1. COMPILE ==================== -->
     <target name="compile" description="Компиляция исходных кодов">
+        <antcall target="native2ascii"/>
         <ant antfile="build-jar.xml" target="compile" inheritall="false">
             <property name="param.src" value="${src.dir}"/>
             <property name="param.classes" value="${build.dir}/classes"/>

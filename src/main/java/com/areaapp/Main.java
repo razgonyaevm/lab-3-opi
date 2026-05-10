@@ -1,5 +1,7 @@
 package com.areaapp;
 
+import java.util.ResourceBundle;
+
 /**
  * Главный класс приложения.
  * <p>
@@ -16,6 +18,7 @@ public class Main {
      * @param args аргументы командной строки (не используются)
      */
     public static void main(String[] args) {
-        System.out.println("Ant build success! Lab #3");
+        ResourceBundle bundle = ResourceBundle.getBundle("locale.messages");
+        System.out.println(bundle.getString("main.success"));
     }
 }
