@@ -10,6 +10,18 @@ import java.io.Serializable;
 import lombok.Getter;
 import lombok.Setter;
 
+/**
+ * Managed bean для обработки проверки попадания точек в заданную область.
+ * <p>
+ * Отвечает за получение координат от пользователя через форму или клик по графику,
+ * валидацию входных данных и вызов сервиса для сохранения результатов.
+ * </p>
+ *
+ * @author Maksim Razgonyaev
+ * @version 1.0
+ * @see PointService
+ * @see PointResult
+ */
 @Named
 @SessionScoped
 @Getter
@@ -17,12 +29,25 @@ import lombok.Setter;
 public class AreaCheckBean implements Serializable {
   private static final long serialVersionUID = 1L;
 
+  /** Координата X точки */
   private Double x = 0.0;
+
+  /** Координата Y точки */
   private Double y = 0.0;
+
+  /** Радиус области проверки */
   private Double r = 1.0;
 
+  /** Сервис для сохранения результатов проверки */
   @Inject private PointService pointService;
 
+  /**
+   * Проверяет попадание текущей точки в область и сохраняет результат.
+   * <p>
+   * Выполняет валидацию координат, проверку попадания в геометрическую область
+   * и сохраняет результат через {@link PointService}.
+   * </p>
+   */
   public void checkPoint() {
     System.out.println("Проверка точки: X=" + x + ", Y=" + y + ", R=" + r);
     if (isValidCoordinates(x, y, r)) {
@@ -34,6 +59,13 @@ public class AreaCheckBean implements Serializable {
     }
   }
 
+  /**
+   * Обрабатывает клик пользователя по графику области.
+   * <p>
+   * Извлекает координаты X, Y и текущий радиус R из параметров запроса JSF,
+   * выполняет валидацию и запускает проверку точки.
+   * </p>
+   */
   public void checkClick() {
     FacesContext context = FacesContext.getCurrentInstance();
     String clickXStr = context.getExternalContext().getRequestParameterMap().get("clickX");
@@ -67,11 +99,35 @@ public class AreaCheckBean implements Serializable {
     }
   }
 
+  /**
+   * Проверяет, что координаты находятся в допустимом диапазоне.
+   *
+   * @param x координата X (от -5 до 3)
+   * @param y координата Y (от -3 до 3)
+   * @param r радиус (от 1 до 3)
+   * @return true, если координаты валидны
+   */
   private boolean isValidCoordinates(Double x, Double y, Double r) {
     return x != null && y != null && r != null && x >= -5 && x <= 3 && y >= -3 && y <= 3 && r >= 1
         && r <= 3;
   }
 
+  /**
+   * Проверяет попадание точки в геометрическую область.
+   * <p>
+   * Область состоит из:
+   * <ul>
+   *   <li>Треугольник в первой четверти (x ≥ 0, y ≥ 0)</li>
+   *   <li>Четверть круга во второй четверти (x ≤ 0, y ≥ 0)</li>
+   *   <li>Квадрат в третьей четверти (x ≤ 0, y ≤ 0)</li>
+   * </ul>
+   * </p>
+   *
+   * @param x координата X
+   * @param y координата Y
+   * @param r радиус области
+   * @return true, если точка попала в область
+   */
   private boolean checkArea(Double x, Double y, Double r) {
     if (!isValidCoordinates(x, y, r)) {
       return false;
