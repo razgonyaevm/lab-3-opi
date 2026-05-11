@@ -203,6 +203,242 @@
               failonerror="false"/>
     </target>
 
+    <!-- ==================== 12. HISTORY ====================
+         Если compile падает — откатываемся к предыдущей ревизии svn и пробуем снова.
+         Когда сборка удалась — формируется diff между этой ревизией и следующей за ней
+         (т.е. той, на которой всё ломалось). -->
+    <target name="history" description="Откат по svn до рабочей ревизии + diff">
+        <!-- Узнаём текущую (HEAD) ревизию рабочей копии -->
+        <exec executable="svn" dir="${svn.workdir}" outputproperty="history.head.rev" failonerror="true">
+            <arg value="info"/>
+            <arg value="--show-item"/>
+            <arg value="revision"/>
+        </exec>
+        <echo message="[HISTORY] Стартовая ревизия: ${history.head.rev}"/>
+        <antcall target="-history-loop">
+            <param name="current.rev" value="${history.head.rev}"/>
+            <param name="broken.rev" value="${history.head.rev}"/>
+        </antcall>
+    </target>
+
+    <!-- Рекурсивный шаг: пробуем собрать на current.rev, при неудаче -1 -->
+    <target name="-history-loop">
+        <echo message="[HISTORY] Пробуем ревизию ${current.rev}"/>
+        <exec executable="svn" dir="${svn.workdir}" failonerror="true">
+            <arg value="update"/>
+            <arg value="-r"/>
+            <arg value="${current.rev}"/>
+        </exec>
+        <!-- Запускаем compile в отдельном процессе, чтобы перехватить ошибку -->
+        <exec executable="ant" dir="${svn.workdir}" resultproperty="history.compile.result" failonerror="false">
+            <arg value="-f"/>
+            <arg value="build.xml"/>
+            <arg value="clean"/>
+            <arg value="compile"/>
+        </exec>
+        <condition property="history.success">
+            <equals arg1="${history.compile.result}" arg2="0"/>
+        </condition>
+        <antcall target="-history-on-success"/>
+        <antcall target="-history-on-fail"/>
+    </target>
+
+    <target name="-history-on-success" if="history.success">
+        <echo message="[HISTORY] УСПЕХ на ревизии ${current.rev}"/>
+        <!-- Если broken.rev > current.rev, считаем diff между current и (current+1) -->
+        <condition property="history.has.broken">
+            <not><equals arg1="${current.rev}" arg2="${broken.rev}"/></not>
+        </condition>
+        <antcall target="-history-make-diff"/>
+    </target>
+
+    <target name="-history-make-diff" if="history.has.broken">
+        <mkdir dir="${dist.dir}"/>
+        <exec executable="sh" outputproperty="next.rev">
+            <arg value="-c"/>
+            <arg value="echo $((${current.rev} + 1))"/>
+        </exec>
+        <echo message="[HISTORY] Формирую diff между r${current.rev} и r${next.rev}"/>
+        <exec executable="svn" dir="${svn.workdir}" output="${history.diff.file}" failonerror="false">
+            <arg value="diff"/>
+            <arg value="-r"/>
+            <arg value="${current.rev}:${next.rev}"/>
+        </exec>
+        <echo message="[HISTORY] Diff сохранён в ${history.diff.file}"/>
+    </target>
+
+    <target name="-history-on-fail" unless="history.success">
+        <echo message="[HISTORY] Не удалось собрать на ревизии ${current.rev}"/>
+        <condition property="history.is.first">
+            <equals arg1="${current.rev}" arg2="1"/>
+        </condition>
+        <fail if="history.is.first" message="[HISTORY] Достигнута самая первая ревизия — ни одна не собирается"/>
+        <exec executable="sh" outputproperty="prev.rev">
+            <arg value="-c"/>
+            <arg value="echo $((${current.rev} - 1))"/>
+        </exec>
+        <antcall target="-history-loop">
+            <param name="current.rev" value="${prev.rev}"/>
+            <param name="broken.rev" value="${current.rev}"/>
+        </antcall>
+    </target>
+
+    <!-- ==================== 13. TEAM ====================
+         Получает N (svn.previous.revisions) последних ревизий из svn, собирает каждую
+         через build и упаковывает все jar-файлы в один zip-архив. -->
+    <target name="team" description="Сборка N предыдущих ревизий и упаковка в zip">
+        <delete dir="${team.dir}"/>
+        <mkdir dir="${team.dir}"/>
+        <mkdir dir="${dist.dir}"/>
+
+        <!-- Получаем номер HEAD -->
+        <exec executable="svn" outputproperty="team.head.rev" failonerror="true">
+            <arg value="info"/>
+            <arg value="${svn.repo.url}"/>
+            <arg value="--show-item"/>
+            <arg value="revision"/>
+        </exec>
+        <echo message="[TEAM] HEAD = ${team.head.rev}, берём ${svn.previous.revisions} ревизий"/>
+
+        <antcall target="-team-iter">
+            <param name="team.rev" value="${team.head.rev}"/>
+            <param name="team.left" value="${svn.previous.revisions}"/>
+        </antcall>
+
+        <!-- Упаковываем все собранные jar в zip -->
+        <zip destfile="${team.zip}">
+            <fileset dir="${team.dir}" includes="**/*.jar"/>
+        </zip>
+        <echo message="[TEAM] Архив создан: ${team.zip}"/>
+    </target>
+
+    <target name="-team-iter">
+        <condition property="team.stop">
+            <or>
+                <equals arg1="${team.left}" arg2="0"/>
+                <equals arg1="${team.rev}" arg2="0"/>
+            </or>
+        </condition>
+        <antcall target="-team-build-rev"/>
+    </target>
+
+    <target name="-team-build-rev" unless="team.stop">
+        <echo message="[TEAM] Сборка ревизии r${team.rev}"/>
+        <property name="team.rev.dir" value="${team.dir}/r${team.rev}"/>
+        <delete dir="${team.rev.dir}"/>
+        <exec executable="svn" failonerror="true">
+            <arg value="export"/>
+            <arg value="-r"/>
+            <arg value="${team.rev}"/>
+            <arg value="${svn.repo.url}"/>
+            <arg value="${team.rev.dir}"/>
+        </exec>
+        <!-- Собираем в экспортированной копии через build -->
+        <exec executable="ant" dir="${team.rev.dir}" failonerror="false">
+            <arg value="-f"/>
+            <arg value="build.xml"/>
+            <arg value="build"/>
+        </exec>
+        <!-- Переносим получившийся jar с суффиксом ревизии -->
+        <copy todir="${team.dir}" failonerror="false" flatten="true">
+            <fileset dir="${team.rev.dir}/${dist.dir}" includes="*.jar" erroronmissingdir="false"/>
+            <globmapper from="*.jar" to="*-r${team.rev}.jar"/>
+        </copy>
+
+        <exec executable="sh" outputproperty="team.next.rev">
+            <arg value="-c"/>
+            <arg value="echo $((${team.rev} - 1))"/>
+        </exec>
+        <exec executable="sh" outputproperty="team.next.left">
+            <arg value="-c"/>
+            <arg value="echo $((${team.left} - 1))"/>
+        </exec>
+        <antcall target="-team-iter">
+            <param name="team.rev" value="${team.next.rev}"/>
+            <param name="team.left" value="${team.next.left}"/>
+        </antcall>
+    </target>
+
+    <!-- ==================== 14. ENV ====================
+         Сборка и запуск jar в нескольких альтернативных окружениях.
+         Окружения объявлены в build.properties: env.list, env.<name>.home, env.<name>.args.
+         Для каждого окружения пересобираем jar нужной JDK и запускаем его с заданными
+         JVM-аргументами. -->
+    <target name="env" description="Сборка/запуск в альтернативных JDK">
+        <!-- Универсальная цель: на каждое окружение из env.list — отдельный antcall -->
+        <antcall target="-env-one">
+            <param name="env.name" value="java17"/>
+            <param name="env.java.home" value="${env.java17.home}"/>
+            <param name="env.java.args" value="${env.java17.args}"/>
+        </antcall>
+        <antcall target="-env-one">
+            <param name="env.name" value="java21"/>
+            <param name="env.java.home" value="${env.java21.home}"/>
+            <param name="env.java.args" value="${env.java21.args}"/>
+        </antcall>
+    </target>
+
+    <target name="-env-one">
+        <echo message="================================================"/>
+        <echo message="[ENV] Окружение : ${env.name}"/>
+        <echo message="[ENV] JAVA_HOME : ${env.java.home}"/>
+        <echo message="[ENV] JVM args  : ${env.java.args}"/>
+        <echo message="================================================"/>
+
+        <!-- Проверяем, что такая JDK существует -->
+        <available file="${env.java.home}/bin/javac" property="env.jdk.available"/>
+        <fail unless="env.jdk.available"
+              message="[ENV] JDK не найдена: ${env.java.home}"/>
+
+        <!-- Печатаем версию -->
+        <exec executable="${env.java.home}/bin/java" failonerror="false">
+            <arg value="-version"/>
+        </exec>
+
+        <!-- Пересобираем под текущую JDK во временный каталог -->
+        <property name="env.build.dir" value="${build.dir}/env/${env.name}"/>
+        <property name="env.dist.jar" value="${dist.dir}/${project.name}-${env.name}.jar"/>
+        <delete dir="${env.build.dir}"/>
+        <mkdir dir="${env.build.dir}/classes"/>
+
+        <javac srcdir="${src.dir}"
+               destdir="${env.build.dir}/classes"
+               source="${compiler.source}"
+               target="${compiler.target}"
+               includeantruntime="false"
+               fork="true"
+               executable="${env.java.home}/bin/javac"
+               debug="true">
+            <classpath>
+                <fileset dir="${lib.dir}" includes="**/*.jar"/>
+            </classpath>
+        </javac>
+        <copy todir="${env.build.dir}/classes">
+            <fileset dir="${resources.dir}" excludes="**/*.java,locale/**"/>
+        </copy>
+        <copy todir="${env.build.dir}/classes/locale" failonerror="false">
+            <fileset dir="${build.dir}/locale" erroronmissingdir="false"/>
+        </copy>
+
+        <manifest file="${env.build.dir}/MANIFEST.MF">
+            <attribute name="Main-Class" value="${main.class}"/>
+            <attribute name="Implementation-Version" value="${project.version}"/>
+            <attribute name="Built-By" value="${user.name}"/>
+            <attribute name="Build-Date" value="${TODAY}"/>
+            <attribute name="Build-Env" value="${env.name}"/>
+        </manifest>
+        <jar destfile="${env.dist.jar}"
+             basedir="${env.build.dir}/classes"
+             manifest="${env.build.dir}/MANIFEST.MF"/>
+
+        <echo message="[ENV] Запуск ${env.dist.jar} на ${env.name}..."/>
+        <exec executable="${env.java.home}/bin/java" failonerror="false">
+            <arg line="${env.java.args}"/>
+            <arg value="-jar"/>
+            <arg value="${env.dist.jar}"/>
+        </exec>
+    </target>
+
     <!-- ==================== 15. DIFF ==================== -->
     <target name="diff" description="Проверка изменений и commit в SVN">
         <exec executable="svn" outputproperty="svn.status" failonerror="false">
