@@ -209,8 +209,9 @@
          (т.е. той, на которой всё ломалось). -->
     <target name="history" description="Откат по svn до рабочей ревизии + diff">
         <!-- Узнаём текущую (HEAD) ревизию рабочей копии -->
-        <exec executable="svn" dir="${svn.workdir}" outputproperty="history.head.rev" failonerror="true">
+        <exec executable="svn" outputproperty="history.head.rev" failonerror="true">
             <arg value="info"/>
+            <arg value="${svn.repo.url}"/>
             <arg value="--show-item"/>
             <arg value="revision"/>
         </exec>
@@ -218,7 +219,7 @@
         <mkdir dir="${dist.dir}"/>
         <exec executable="sh" dir="${svn.workdir}" failonerror="true">
             <arg value="-c"/>
-            <arg value="rev=${history.head.rev}; broken=${history.head.rev}; while [ $rev -ge 1 ]; do echo '[HISTORY] Пробуем ревизию '${rev}; svn update -r ${rev}; if ant -f build.xml clean compile; then echo '[HISTORY] УСПЕХ на ревизии '${rev}; if [ $rev -lt $broken ]; then next=$((rev + 1)); echo '[HISTORY] Формирую diff между r'${rev}' и r'${next}; svn diff -r ${rev}:${next} &gt; '../${history.diff.file}'; echo '[HISTORY] Diff сохранён в ${history.diff.file}'; fi; exit 0; fi; echo '[HISTORY] Не удалось собрать на ревизии '${rev}; broken=${rev}; rev=$((rev - 1)); done; echo '[HISTORY] Достигнута самая первая ревизия — ни одна не собирается'; exit 1"/>
+            <arg value="rev=${history.head.rev}; broken=${history.head.rev}; while [ $rev -ge 1 ]; do echo '[HISTORY] Пробуем ревизию '${rev}; svn update -r ${rev}; [ -f ../build-jar.xml ] &amp;&amp; cp ../build-jar.xml build-jar.xml; [ -d ../lib ] &amp;&amp; rm -rf lib &amp;&amp; cp -R ../lib lib; if ant -f build.xml clean compile; then echo '[HISTORY] УСПЕХ на ревизии '${rev}; if [ $rev -lt $broken ]; then next=$((rev + 1)); echo '[HISTORY] Формирую diff между r'${rev}' и r'${next}; svn diff -r ${rev}:${next} &gt; '../${history.diff.file}'; echo '[HISTORY] Diff сохранён в ${history.diff.file}'; fi; exit 0; fi; echo '[HISTORY] Не удалось собрать на ревизии '${rev}; broken=${rev}; rev=$((rev - 1)); done; echo '[HISTORY] Достигнута самая первая ревизия — ни одна не собирается'; exit 1"/>
         </exec>
     </target>
 
@@ -241,12 +242,12 @@
 
         <exec executable="sh" failonerror="true">
             <arg value="-c"/>
-            <arg value="rev=${team.head.rev}; left=${svn.previous.revisions}; while [ $left -gt 0 ] &amp;&amp; [ $rev -gt 0 ]; do echo '[TEAM] Сборка ревизии r'${rev}; rev_dir='${team.dir}/r'${rev}; rm -rf &quot;${rev_dir}&quot;; svn export -r ${rev} '${svn.repo.url}' &quot;${rev_dir}&quot;; (cd &quot;${rev_dir}&quot; &amp;&amp; ant -f build.xml build) || true; if [ -d &quot;${rev_dir}/${dist.dir}&quot; ]; then for jar in &quot;${rev_dir}/${dist.dir}&quot;/*.jar; do [ -e &quot;${jar}&quot; ] &amp;&amp; cp &quot;${jar}&quot; '${team.dir}/'$(basename &quot;${jar}&quot; .jar)'-r'${rev}'.jar'; done; fi; rev=$((rev - 1)); left=$((left - 1)); done"/>
+            <arg value="rev=$((${team.head.rev} - 1)); left=${svn.previous.revisions}; while [ $left -gt 0 ] &amp;&amp; [ $rev -gt 0 ]; do echo '[TEAM] Сборка ревизии r'${rev}; rev_dir='${team.dir}/r'${rev}; rm -rf &quot;${rev_dir}&quot;; svn export -r ${rev} '${svn.repo.url}' &quot;${rev_dir}&quot;; [ -f build-jar.xml ] &amp;&amp; cp build-jar.xml &quot;${rev_dir}/build-jar.xml&quot;; [ -d lib ] &amp;&amp; cp -R lib &quot;${rev_dir}/lib&quot;; (cd &quot;${rev_dir}&quot; &amp;&amp; ant -f build.xml build) || true; if [ -d &quot;${rev_dir}/${dist.dir}&quot; ]; then for jar in &quot;${rev_dir}/${dist.dir}&quot;/*.jar; do [ -e &quot;${jar}&quot; ] &amp;&amp; cp &quot;${jar}&quot; '${team.dir}/'$(basename &quot;${jar}&quot; .jar)'-r'${rev}'.jar'; done; fi; rev=$((rev - 1)); left=$((left - 1)); done"/>
         </exec>
 
         <!-- Упаковываем все собранные jar в zip -->
         <zip destfile="${team.zip}">
-            <fileset dir="${team.dir}" includes="**/*.jar"/>
+            <fileset dir="${team.dir}" includes="*.jar"/>
         </zip>
         <echo message="[TEAM] Архив создан: ${team.zip}"/>
     </target>
