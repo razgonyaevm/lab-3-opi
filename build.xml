@@ -215,72 +215,11 @@
             <arg value="revision"/>
         </exec>
         <echo message="[HISTORY] Стартовая ревизия: ${history.head.rev}"/>
-        <antcall target="-history-loop">
-            <param name="current.rev" value="${history.head.rev}"/>
-            <param name="broken.rev" value="${history.head.rev}"/>
-        </antcall>
-    </target>
-
-    <!-- Рекурсивный шаг: пробуем собрать на current.rev, при неудаче -1 -->
-    <target name="-history-loop">
-        <echo message="[HISTORY] Пробуем ревизию ${current.rev}"/>
-        <exec executable="svn" dir="${svn.workdir}" failonerror="true">
-            <arg value="update"/>
-            <arg value="-r"/>
-            <arg value="${current.rev}"/>
-        </exec>
-        <!-- Запускаем compile в отдельном процессе, чтобы перехватить ошибку -->
-        <exec executable="ant" dir="${svn.workdir}" resultproperty="history.compile.result" failonerror="false">
-            <arg value="-f"/>
-            <arg value="build.xml"/>
-            <arg value="clean"/>
-            <arg value="compile"/>
-        </exec>
-        <condition property="history.success">
-            <equals arg1="${history.compile.result}" arg2="0"/>
-        </condition>
-        <antcall target="-history-on-success"/>
-        <antcall target="-history-on-fail"/>
-    </target>
-
-    <target name="-history-on-success" if="history.success">
-        <echo message="[HISTORY] УСПЕХ на ревизии ${current.rev}"/>
-        <!-- Если broken.rev > current.rev, считаем diff между current и (current+1) -->
-        <condition property="history.has.broken">
-            <not><equals arg1="${current.rev}" arg2="${broken.rev}"/></not>
-        </condition>
-        <antcall target="-history-make-diff"/>
-    </target>
-
-    <target name="-history-make-diff" if="history.has.broken">
         <mkdir dir="${dist.dir}"/>
-        <exec executable="sh" outputproperty="next.rev">
+        <exec executable="sh" dir="${svn.workdir}" failonerror="true">
             <arg value="-c"/>
-            <arg value="echo $((${current.rev} + 1))"/>
+            <arg value="rev=${history.head.rev}; broken=${history.head.rev}; while [ $rev -ge 1 ]; do echo '[HISTORY] Пробуем ревизию '${rev}; svn update -r ${rev}; if ant -f build.xml clean compile; then echo '[HISTORY] УСПЕХ на ревизии '${rev}; if [ $rev -lt $broken ]; then next=$((rev + 1)); echo '[HISTORY] Формирую diff между r'${rev}' и r'${next}; svn diff -r ${rev}:${next} &gt; '../${history.diff.file}'; echo '[HISTORY] Diff сохранён в ${history.diff.file}'; fi; exit 0; fi; echo '[HISTORY] Не удалось собрать на ревизии '${rev}; broken=${rev}; rev=$((rev - 1)); done; echo '[HISTORY] Достигнута самая первая ревизия — ни одна не собирается'; exit 1"/>
         </exec>
-        <echo message="[HISTORY] Формирую diff между r${current.rev} и r${next.rev}"/>
-        <exec executable="svn" dir="${svn.workdir}" output="${history.diff.file}" failonerror="false">
-            <arg value="diff"/>
-            <arg value="-r"/>
-            <arg value="${current.rev}:${next.rev}"/>
-        </exec>
-        <echo message="[HISTORY] Diff сохранён в ${history.diff.file}"/>
-    </target>
-
-    <target name="-history-on-fail" unless="history.success">
-        <echo message="[HISTORY] Не удалось собрать на ревизии ${current.rev}"/>
-        <condition property="history.is.first">
-            <equals arg1="${current.rev}" arg2="1"/>
-        </condition>
-        <fail if="history.is.first" message="[HISTORY] Достигнута самая первая ревизия — ни одна не собирается"/>
-        <exec executable="sh" outputproperty="prev.rev">
-            <arg value="-c"/>
-            <arg value="echo $((${current.rev} - 1))"/>
-        </exec>
-        <antcall target="-history-loop">
-            <param name="current.rev" value="${prev.rev}"/>
-            <param name="broken.rev" value="${current.rev}"/>
-        </antcall>
     </target>
 
     <!-- ==================== 13. TEAM ====================
@@ -300,63 +239,16 @@
         </exec>
         <echo message="[TEAM] HEAD = ${team.head.rev}, берём ${svn.previous.revisions} ревизий"/>
 
-        <antcall target="-team-iter">
-            <param name="team.rev" value="${team.head.rev}"/>
-            <param name="team.left" value="${svn.previous.revisions}"/>
-        </antcall>
+        <exec executable="sh" failonerror="true">
+            <arg value="-c"/>
+            <arg value="rev=${team.head.rev}; left=${svn.previous.revisions}; while [ $left -gt 0 ] &amp;&amp; [ $rev -gt 0 ]; do echo '[TEAM] Сборка ревизии r'${rev}; rev_dir='${team.dir}/r'${rev}; rm -rf &quot;${rev_dir}&quot;; svn export -r ${rev} '${svn.repo.url}' &quot;${rev_dir}&quot;; (cd &quot;${rev_dir}&quot; &amp;&amp; ant -f build.xml build) || true; if [ -d &quot;${rev_dir}/${dist.dir}&quot; ]; then for jar in &quot;${rev_dir}/${dist.dir}&quot;/*.jar; do [ -e &quot;${jar}&quot; ] &amp;&amp; cp &quot;${jar}&quot; '${team.dir}/'$(basename &quot;${jar}&quot; .jar)'-r'${rev}'.jar'; done; fi; rev=$((rev - 1)); left=$((left - 1)); done"/>
+        </exec>
 
         <!-- Упаковываем все собранные jar в zip -->
         <zip destfile="${team.zip}">
             <fileset dir="${team.dir}" includes="**/*.jar"/>
         </zip>
         <echo message="[TEAM] Архив создан: ${team.zip}"/>
-    </target>
-
-    <target name="-team-iter">
-        <condition property="team.stop">
-            <or>
-                <equals arg1="${team.left}" arg2="0"/>
-                <equals arg1="${team.rev}" arg2="0"/>
-            </or>
-        </condition>
-        <antcall target="-team-build-rev"/>
-    </target>
-
-    <target name="-team-build-rev" unless="team.stop">
-        <echo message="[TEAM] Сборка ревизии r${team.rev}"/>
-        <property name="team.rev.dir" value="${team.dir}/r${team.rev}"/>
-        <delete dir="${team.rev.dir}"/>
-        <exec executable="svn" failonerror="true">
-            <arg value="export"/>
-            <arg value="-r"/>
-            <arg value="${team.rev}"/>
-            <arg value="${svn.repo.url}"/>
-            <arg value="${team.rev.dir}"/>
-        </exec>
-        <!-- Собираем в экспортированной копии через build -->
-        <exec executable="ant" dir="${team.rev.dir}" failonerror="false">
-            <arg value="-f"/>
-            <arg value="build.xml"/>
-            <arg value="build"/>
-        </exec>
-        <!-- Переносим получившийся jar с суффиксом ревизии -->
-        <copy todir="${team.dir}" failonerror="false" flatten="true">
-            <fileset dir="${team.rev.dir}/${dist.dir}" includes="*.jar" erroronmissingdir="false"/>
-            <globmapper from="*.jar" to="*-r${team.rev}.jar"/>
-        </copy>
-
-        <exec executable="sh" outputproperty="team.next.rev">
-            <arg value="-c"/>
-            <arg value="echo $((${team.rev} - 1))"/>
-        </exec>
-        <exec executable="sh" outputproperty="team.next.left">
-            <arg value="-c"/>
-            <arg value="echo $((${team.left} - 1))"/>
-        </exec>
-        <antcall target="-team-iter">
-            <param name="team.rev" value="${team.next.rev}"/>
-            <param name="team.left" value="${team.next.left}"/>
-        </antcall>
     </target>
 
     <!-- ==================== 14. ENV ====================
