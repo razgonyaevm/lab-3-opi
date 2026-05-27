@@ -35,7 +35,8 @@
         <delete dir="${dist.dir}"/>
         <delete dir="${doc.dir}"/>
         <!-- Очищаем reports, но не удаляем саму папку -->
-        <delete includeemptydirs="true">
+        <mkdir dir="${report.dir}"/>
+        <delete includeemptydirs="true" quiet="true">
             <fileset dir="${report.dir}" includes="**/*"/>
         </delete>
         <echo message="[CLEAN] Очистка завершена"/>
@@ -123,13 +124,26 @@
             <format property="scp.timestamp" pattern="yyyy-MM-dd_HH-mm-ss"/>
         </tstamp>
 
-        <exec executable="scp" failonerror="false">
+        <exec executable="scp" failonerror="false" resultproperty="scp.result">
+            <arg line="${scp.ssh.options}"/>
             <arg value="-P"/>
             <arg value="${scp.port}"/>
             <arg value="${dist.dir}/${project.name}.jar"/>
             <arg value="${scp.user}@${scp.server}:${scp.path}/${project.name}-${scp.timestamp}.jar"/>
         </exec>
+        <condition property="scp.ok">
+            <equals arg1="${scp.result}" arg2="0"/>
+        </condition>
+        <antcall target="scp-success"/>
+        <antcall target="scp-failed"/>
+    </target>
+
+    <target name="scp-success" if="scp.ok">
         <echo message="[SCP] Файл отправлен: ${project.name}-${scp.timestamp}.jar"/>
+    </target>
+
+    <target name="scp-failed" unless="scp.ok">
+        <echo message="[SCP] Не удалось отправить файл (код ${scp.result}). Проверьте SSH-ключ для ${scp.user}@${scp.server}"/>
     </target>
 
     <!-- ==================== 8. NATIVE2ASCII ==================== -->
@@ -146,22 +160,25 @@
     <!-- ==================== 9. XML ==================== -->
     <target name="xml" description="Валидация всех XML-файлов в проекте">
         <xmlvalidate lenient="yes">
-            <fileset dir="." includes="**/*.xml" excludes=".idea/**"/>
+            <fileset dir="." includes="**/*.xml"
+                      excludes=".idea/**,apache-ant-*/**,build/**,dist/**,doc/**,repo/**,svn_test/build/**"/>
         </xmlvalidate>
         <echo message="[XML] Валидация XML завершена"/>
     </target>
 
     <!-- ==================== 10. REPORT ==================== -->
     <target name="report" depends="test" description="JUnit отчёт + commit в SVN">
-        <exec executable="svn" failonerror="false">
+        <exec executable="svn" dir="${svn.workdir}" failonerror="true">
             <arg value="add"/>
+            <arg value="--parents"/>
             <arg value="--force"/>
-            <arg value="${report.dir}/junit"/>
+            <arg value="${svn.report.path}"/>
         </exec>
-        <exec executable="svn" failonerror="false">
+        <exec executable="svn" dir="${svn.workdir}" failonerror="true">
             <arg value="commit"/>
             <arg value="-m"/>
             <arg value="JUnit test report"/>
+            <arg value="${svn.report.path}"/>
         </exec>
         <echo message="[REPORT] Отчёт сохранён и закоммичен в SVN"/>
     </target>
@@ -183,7 +200,7 @@
             <property name="param.src" value="${build.dir}/alt/src"/>
             <property name="param.classes" value="${build.dir}/alt/classes"/>
             <property name="param.name" value="${project.name}-alt"/>
-            <property name="param.main" value="${replace.class.new}"/>
+            <property name="param.main" value="${replace.main.class}"/>
         </ant>
         <echo message="[ALT] Альтернативная версия создана: ${dist.dir}/${project.name}-alt.jar"/>
     </target>
@@ -208,7 +225,6 @@
          Когда сборка удалась — формируется diff между этой ревизией и следующей за ней
          (т.е. той, на которой всё ломалось). -->
     <target name="history" description="Откат по svn до рабочей ревизии + diff">
-        <!-- Узнаём текущую (HEAD) ревизию рабочей копии -->
         <exec executable="svn" outputproperty="history.head.rev" failonerror="true">
             <arg value="info"/>
             <arg value="${svn.repo.url}"/>
@@ -217,10 +233,91 @@
         </exec>
         <echo message="[HISTORY] Стартовая ревизия: ${history.head.rev}"/>
         <mkdir dir="${dist.dir}"/>
-        <exec executable="sh" dir="${svn.workdir}" failonerror="true">
-            <arg value="-c"/>
-            <arg value="rev=${history.head.rev}; broken=${history.head.rev}; while [ $rev -ge 1 ]; do echo '[HISTORY] Пробуем ревизию '${rev}; svn update -r ${rev}; [ -f ../build-jar.xml ] &amp;&amp; cp ../build-jar.xml build-jar.xml; [ -d ../lib ] &amp;&amp; rm -rf lib &amp;&amp; cp -R ../lib lib; if ant -f build.xml clean compile; then echo '[HISTORY] УСПЕХ на ревизии '${rev}; if [ $rev -lt $broken ]; then next=$((rev + 1)); echo '[HISTORY] Формирую diff между r'${rev}' и r'${next}; svn diff -r ${rev}:${next} &gt; '../${history.diff.file}'; echo '[HISTORY] Diff сохранён в ${history.diff.file}'; fi; exit 0; fi; echo '[HISTORY] Не удалось собрать на ревизии '${rev}; broken=${rev}; rev=$((rev - 1)); done; echo '[HISTORY] Достигнута самая первая ревизия — ни одна не собирается'; exit 1"/>
+        <ant antfile="${ant.file}" target="-history-loop" inheritall="false">
+            <property name="current.rev" value="${history.head.rev}"/>
+            <property name="broken.rev" value="${history.head.rev}"/>
+        </ant>
+    </target>
+
+    <target name="-history-loop">
+        <echo message="[HISTORY] Пробуем ревизию ${current.rev}"/>
+        <exec executable="svn" dir="${svn.workdir}" failonerror="true">
+            <arg value="update"/>
+            <arg value="-r"/>
+            <arg value="${current.rev}"/>
+            <arg value="--accept"/>
+            <arg value="theirs-full"/>
         </exec>
+        <antcall target="-history-prepare-build"/>
+        <exec executable="ant" dir="${svn.workdir}" resultproperty="history.compile.result" failonerror="false">
+            <arg value="-f"/>
+            <arg value="build.xml"/>
+            <arg value="clean"/>
+            <arg value="compile"/>
+        </exec>
+        <condition property="history.success">
+            <equals arg1="${history.compile.result}" arg2="0"/>
+        </condition>
+        <antcall target="-history-on-success"/>
+        <antcall target="-history-on-fail"/>
+    </target>
+
+    <target name="-history-prepare-build">
+        <copy file="${ant.file}" tofile="${svn.workdir}/build.xml" overwrite="true"/>
+        <copy file="${basedir}/build.properties" tofile="${svn.workdir}/build.properties" overwrite="true"/>
+        <available file="${basedir}/build-jar.xml" property="history.has.build.jar"/>
+        <antcall target="-history-copy-build-jar"/>
+        <available file="${basedir}/${lib.dir}" type="dir" property="history.has.lib"/>
+        <antcall target="-history-copy-lib"/>
+    </target>
+
+    <target name="-history-copy-build-jar" if="history.has.build.jar">
+        <copy file="${basedir}/build-jar.xml" tofile="${svn.workdir}/build-jar.xml" overwrite="true"/>
+    </target>
+
+    <target name="-history-copy-lib" if="history.has.lib">
+        <delete dir="${svn.workdir}/${lib.dir}" quiet="true"/>
+        <copy todir="${svn.workdir}/${lib.dir}">
+            <fileset dir="${basedir}/${lib.dir}"/>
+        </copy>
+    </target>
+
+    <target name="-history-on-success" if="history.success">
+        <echo message="[HISTORY] УСПЕХ на ревизии ${current.rev}"/>
+        <condition property="history.has.broken">
+            <not><equals arg1="${current.rev}" arg2="${broken.rev}"/></not>
+        </condition>
+        <antcall target="-history-make-diff"/>
+    </target>
+
+    <target name="-history-make-diff" if="history.has.broken">
+        <exec executable="sh" outputproperty="next.rev">
+            <arg value="-c"/>
+            <arg value="echo $((${current.rev} + 1))"/>
+        </exec>
+        <echo message="[HISTORY] Формирую diff между r${current.rev} и r${next.rev}"/>
+        <exec executable="svn" dir="${svn.workdir}" output="${history.diff.file}" failonerror="false">
+            <arg value="diff"/>
+            <arg value="-r"/>
+            <arg value="${current.rev}:${next.rev}"/>
+        </exec>
+        <echo message="[HISTORY] Diff сохранён в ${history.diff.file}"/>
+    </target>
+
+    <target name="-history-on-fail" unless="history.success">
+        <echo message="[HISTORY] Не удалось собрать на ревизии ${current.rev}"/>
+        <condition property="history.is.first">
+            <equals arg1="${current.rev}" arg2="1"/>
+        </condition>
+        <fail if="history.is.first" message="[HISTORY] Достигнута самая первая ревизия — ни одна не собирается"/>
+        <exec executable="sh" outputproperty="prev.rev">
+            <arg value="-c"/>
+            <arg value="echo $((${current.rev} - 1))"/>
+        </exec>
+        <ant antfile="${ant.file}" target="-history-loop" inheritall="false">
+            <property name="current.rev" value="${prev.rev}"/>
+            <property name="broken.rev" value="${current.rev}"/>
+        </ant>
     </target>
 
     <!-- ==================== 13. TEAM ====================
@@ -345,27 +442,43 @@
 
     <!-- ==================== 15. DIFF ==================== -->
     <target name="diff" description="Проверка изменений и commit в SVN">
-        <exec executable="svn" outputproperty="svn.status" failonerror="false">
+        <exec executable="svn" dir="${svn.workdir}" outputproperty="svn.status" failonerror="true">
             <arg value="status"/>
         </exec>
-        <echo message="SVN Status: ${svn.status}"/>
+        <echo message="SVN Status:${line.separator}${svn.status}"/>
+        <condition property="svn.has.changes">
+            <or>
+                <contains string="${svn.status}" substring="M "/>
+                <contains string="${svn.status}" substring="A "/>
+                <contains string="${svn.status}" substring="D "/>
+                <contains string="${svn.status}" substring="R "/>
+            </or>
+        </condition>
         <condition property="can.commit">
-            <not>
-                <and>
-                    <contains string="${svn.status}" substring="${diff.allowed.classes}"/>
-                    <contains string="${svn.status}" substring="M "/>
-                </and>
-            </not>
+            <and>
+                <isset property="svn.has.changes"/>
+                <not>
+                    <and>
+                        <contains string="${svn.status}" substring="${diff.allowed.classes}"/>
+                        <contains string="${svn.status}" substring="M "/>
+                    </and>
+                </not>
+            </and>
         </condition>
         <antcall target="svn-commit-if-allowed"/>
+        <antcall target="svn-skip-commit"/>
     </target>
 
     <target name="svn-commit-if-allowed" if="can.commit">
-        <exec executable="svn" failonerror="false">
+        <exec executable="svn" dir="${svn.workdir}" failonerror="true">
             <arg value="commit"/>
             <arg value="-m"/>
-            <arg value="Auto-commit: allowed classes changed"/>
+            <arg value="Auto-commit: changes outside protected classes"/>
         </exec>
         <echo message="[DIFF] Изменения закоммичены в SVN"/>
+    </target>
+
+    <target name="svn-skip-commit" unless="can.commit">
+        <echo message="[DIFF] Commit пропущен (нет изменений, защищённый класс изменён или не SVN WC)"/>
     </target>
 </project>
